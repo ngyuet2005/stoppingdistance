@@ -1,0 +1,1803 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>高中物理：汽車煞車與 v-t 圖互動模擬 | Physics Car Braking v-t Graph</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts: Inter & Noto Sans TC -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet">
+    <!-- KaTeX CSS & JS for LaTeX Rendering -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+    <style>
+        body {
+            font-family: 'Inter', 'Noto Sans TC', sans-serif;
+            background-color: #f8fafc;
+            color: #0f172a;
+        }
+        /* Custom Range Slider Styling */
+        input[type=range] {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 100%;
+            background: transparent;
+        }
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%;
+            height: 6px;
+            cursor: pointer;
+            background: #e2e8f0;
+            border-radius: 9999px;
+        }
+        input[type=range].slider-blue::-webkit-slider-thumb {
+            height: 18px;
+            width: 18px;
+            border-radius: 50%;
+            background: #2563eb;
+            cursor: pointer;
+            -webkit-appearance: none;
+            margin-top: -6px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+            transition: transform 0.1s ease;
+        }
+        input[type=range].slider-orange::-webkit-slider-thumb {
+            height: 18px;
+            width: 18px;
+            border-radius: 50%;
+            background: #ea580c;
+            cursor: pointer;
+            -webkit-appearance: none;
+            margin-top: -6px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+            transition: transform 0.1s ease;
+        }
+        input[type=range].slider-time::-webkit-slider-thumb {
+            height: 18px;
+            width: 18px;
+            border-radius: 50%;
+            background: #0f172a;
+            cursor: pointer;
+            -webkit-appearance: none;
+            margin-top: -6px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+        }
+        input[type=range]::-webkit-slider-thumb:hover {
+            transform: scale(1.15);
+        }
+        .canvas-container {
+            position: relative;
+            width: 100%;
+            overflow: hidden;
+        }
+        .katex {
+            font-size: 1.03em;
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col">
+
+    <!-- Top Navigation Header -->
+    <header class="bg-white border-b border-slate-200 sticky top-0 z-30 shadow-sm">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-2.5 min-h-[4rem] flex flex-wrap items-center justify-between gap-3">
+            <div class="flex items-center space-x-3">
+                <div class="w-10 h-10 rounded-xl bg-blue-600 flex items-center justify-center text-white font-bold text-base shadow-sm shrink-0" data-latex="v\text{-}t"></div>
+                <div>
+                    <h1 class="text-base sm:text-lg font-bold text-slate-900 tracking-tight" id="uiHeaderTitle"></h1>
+                    <p class="text-xs text-slate-500 hidden sm:block" id="uiHeaderSub"></p>
+                </div>
+            </div>
+
+            <!-- Right Controls: Language Switcher & Presets -->
+            <div class="flex flex-wrap items-center gap-2 sm:gap-3">
+                <!-- One-Click Bilingual Mode Selector -->
+                <div class="flex items-center bg-slate-100 p-1 rounded-xl border border-slate-200/80 shadow-inner" role="group" aria-label="Language Mode">
+                    <button data-lang="zh" class="lang-btn px-2.5 py-1 rounded-lg text-xs font-medium text-slate-600 transition">
+                        繁中
+                    </button>
+                    <button data-lang="bi" class="lang-btn px-2.5 py-1 rounded-lg text-xs font-bold bg-blue-600 text-white shadow-sm transition">
+                        中英對照 Bilingual
+                    </button>
+                    <button data-lang="en" class="lang-btn px-2.5 py-1 rounded-lg text-xs font-medium text-slate-600 transition">
+                        English
+                    </button>
+                </div>
+
+                <!-- Scenario Presets -->
+                <div class="flex items-center space-x-1.5">
+                    <button id="btnPresetReaction" class="px-2.5 py-1.5 text-xs font-medium rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 transition"></button>
+                    <button id="btnPresetSpeed" class="px-2.5 py-1.5 text-xs font-medium rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 transition"></button>
+                    <button id="btnPresetWet" class="px-2.5 py-1.5 text-xs font-medium rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 transition hidden xl:inline-block"></button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Workspace -->
+    <main class="flex-grow max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-5 space-y-6">
+
+        <!-- Top Section: Road Animation & Playback Bar -->
+        <section class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+            <!-- Road Header & Legend -->
+            <div class="px-5 py-3 border-b border-slate-100 flex flex-wrap items-center justify-between gap-2 bg-slate-50/60">
+                <div class="flex items-center space-x-2">
+                    <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" id="statusDot"></span>
+                    <h2 class="text-sm font-semibold text-slate-800" id="uiRoadTitle"></h2>
+                </div>
+                <div class="flex flex-wrap items-center gap-4 text-xs text-slate-600">
+                    <span class="flex items-center gap-1.5">
+                        <span class="inline-block w-3 h-3 rounded-sm bg-blue-600"></span>
+                        <strong class="text-slate-800" id="uiLegendCarA"></strong>
+                    </span>
+                    <span class="flex items-center gap-1.5" id="legendCarB">
+                        <span class="inline-block w-3 h-3 rounded-sm bg-orange-600"></span>
+                        <strong class="text-slate-800" id="uiLegendCarB"></strong>
+                    </span>
+                    <span class="flex items-center gap-1 text-slate-500">
+                        <svg class="w-3.5 h-3.5 text-amber-500 shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"></path></svg>
+                        <span id="uiLegendBrakeLine"></span>
+                    </span>
+                </div>
+            </div>
+
+            <!-- Road Canvas -->
+            <div class="canvas-container h-48 sm:h-52 bg-slate-50">
+                <canvas id="roadCanvas" class="w-full h-full block"></canvas>
+            </div>
+
+            <!-- Unified Playback Control Bar -->
+            <div class="px-5 py-3.5 bg-white border-t border-slate-200 flex flex-wrap items-center justify-between gap-4">
+                <!-- Left Buttons -->
+                <div class="flex items-center space-x-2">
+                    <button id="btnPlayPause" class="flex items-center space-x-1.5 px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-semibold text-xs sm:text-sm shadow-sm transition">
+                        <svg id="iconPlay" class="w-4 h-4 shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clip-rule="evenodd"></path></svg>
+                        <svg id="iconPause" class="w-4 h-4 shrink-0 hidden" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zM7 8a1 1 0 012 0v4a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v4a1 1 0 102 0V8a1 1 0 00-1-1z" clip-rule="evenodd"></path></svg>
+                        <span id="playBtnText"></span>
+                    </button>
+                    <button id="btnReset" class="px-3 py-2 rounded-xl border border-slate-200 hover:bg-slate-100 text-slate-700 font-medium text-xs sm:text-sm transition flex items-center space-x-1">
+                        <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+                        <span id="uiBtnReset"></span>
+                    </button>
+                    <button id="btnEnd" class="px-3 py-2 rounded-xl border border-slate-200 hover:bg-slate-100 text-slate-700 font-medium text-xs sm:text-sm transition hidden sm:inline-flex items-center space-x-1">
+                        <span id="uiBtnEnd"></span>
+                    </button>
+                </div>
+
+                <!-- Center Scrubber with LaTeX Readout -->
+                <div class="flex-grow max-w-md flex items-center space-x-3">
+                    <span id="timeReadoutLatex" class="text-xs sm:text-sm text-slate-800 whitespace-nowrap"></span>
+                    <input type="range" id="timeScrubber" min="0" max="10" step="0.01" value="0" class="slider-time">
+                    <span id="maxTimeReadoutLatex" class="text-xs text-slate-500 whitespace-nowrap"></span>
+                </div>
+
+                <!-- Right Options: Playback Speed -->
+                <div class="flex items-center space-x-2 text-xs">
+                    <span class="text-slate-500 hidden md:inline" id="uiSpeedLabel"></span>
+                    <div class="flex items-center bg-slate-100 p-1 rounded-lg">
+                        <button data-speed="0.5" class="speed-btn px-2 py-1 rounded-md text-slate-600 font-medium transition" data-latex="0.5\times"></button>
+                        <button data-speed="1" class="speed-btn px-2 py-1 rounded-md bg-white text-slate-900 shadow-sm font-semibold transition" data-latex="1\times"></button>
+                        <button data-speed="2" class="speed-btn px-2 py-1 rounded-md text-slate-600 font-medium transition" data-latex="2\times"></button>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Middle Section: 12-Column Grid (Left: Dynamic v-t Graph, Right: Dual Parameter Controls) -->
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+
+            <!-- Left 7 Columns: Real-time v-t Graph & Area Visuals -->
+            <div class="lg:col-span-7 bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden flex flex-col">
+                <div class="px-5 py-3.5 border-b border-slate-100 flex flex-wrap items-center justify-between gap-2 bg-slate-50/60">
+                    <div class="flex items-center gap-2 flex-wrap">
+                        <h2 class="text-sm font-bold text-slate-800" id="uiVtGraphTitle"></h2>
+                        <span class="text-xs font-normal px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200" id="uiAutoScaleBadge"></span>
+                    </div>
+                    <!-- Graph Visual Toggles -->
+                    <div class="flex flex-wrap items-center gap-3 text-xs">
+                        <label class="inline-flex items-center space-x-1.5 cursor-pointer select-none">
+                            <input type="checkbox" id="chkShowArea" checked class="rounded text-blue-600 focus:ring-blue-500">
+                            <span class="text-slate-700 font-medium" id="uiChkArea"></span>
+                        </label>
+                        <label class="inline-flex items-center space-x-1.5 cursor-pointer select-none">
+                            <input type="checkbox" id="chkShowGhost" class="rounded text-blue-600 focus:ring-blue-500">
+                            <span class="text-slate-700 font-medium" id="uiChkGhost"></span>
+                        </label>
+                        <label class="inline-flex items-center space-x-1.5 cursor-pointer select-none">
+                            <input type="checkbox" id="chkLiveZoom" checked class="rounded text-blue-600 focus:ring-blue-500">
+                            <span class="text-slate-700 font-medium" id="uiChkLiveZoom"></span>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- Graph Canvas Container -->
+                <div class="canvas-container h-80 sm:h-96 p-2 bg-white">
+                    <canvas id="vtCanvas" class="w-full h-full block cursor-crosshair"></canvas>
+                </div>
+
+                <!-- Physics Formula Reminder Bar under Graph (Full LaTeX) -->
+                <div class="px-5 py-3 bg-slate-50 border-t border-slate-100 grid grid-cols-1 sm:grid-cols-3 gap-2.5 text-xs text-slate-700">
+                    <div class="flex items-center space-x-2">
+                        <span class="w-2 h-2 rounded-full bg-blue-500 shrink-0"></span>
+                        <span id="uiFormulaReaction"></span>
+                    </div>
+                    <div class="flex items-center space-x-2">
+                        <span class="w-2 h-2 rounded-full bg-indigo-500 shrink-0"></span>
+                        <span id="uiFormulaBraking"></span>
+                    </div>
+                    <div class="flex items-center space-x-2">
+                        <span class="w-2 h-2 rounded-full bg-emerald-500 shrink-0"></span>
+                        <span id="uiFormulaSlope"></span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right 5 Columns: Parameter Controls & Comparison Table -->
+            <div class="lg:col-span-5 space-y-5">
+
+                <!-- Parameter Control Cards -->
+                <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-5">
+                    <div class="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-3">
+                        <h3 class="text-sm font-bold text-slate-800" id="uiParamHeader"></h3>
+                        <label class="inline-flex items-center space-x-2 cursor-pointer">
+                            <input type="checkbox" id="chkEnableCarB" checked class="rounded text-orange-600 focus:ring-orange-500 w-4 h-4">
+                            <span class="text-xs font-semibold text-orange-700 bg-orange-50 px-2.5 py-1 rounded-lg border border-orange-200" id="uiEnableCarBLabel"></span>
+                        </label>
+                    </div>
+
+                    <!-- Car A (Blue) Controls -->
+                    <div class="p-4 rounded-xl bg-blue-50/50 border border-blue-200/80 space-y-3.5">
+                        <div class="flex flex-wrap items-center justify-between gap-1">
+                            <div class="flex items-center space-x-2">
+                                <span class="w-3 h-3 rounded-full bg-blue-600 shrink-0"></span>
+                                <h4 class="text-sm font-bold text-blue-950" id="uiCarATitle"></h4>
+                            </div>
+                            <span class="text-xs text-blue-800 bg-blue-100/90 px-2.5 py-0.5 rounded-md font-semibold" id="badgeCarA"></span>
+                        </div>
+
+                        <!-- v0 Slider A -->
+                        <div>
+                            <div class="flex justify-between items-baseline text-xs mb-1 gap-2">
+                                <label for="v0A" class="font-medium text-slate-700" id="uiLabelV0A"></label>
+                                <span class="text-blue-700 shrink-0" id="valV0ALatex"></span>
+                            </div>
+                            <input type="range" id="v0A" min="5" max="35" step="0.5" value="20" class="slider-blue">
+                        </div>
+
+                        <!-- tr Slider A -->
+                        <div>
+                            <div class="flex justify-between items-baseline text-xs mb-1 gap-2">
+                                <label for="trA" class="font-medium text-slate-700" id="uiLabelTrA"></label>
+                                <span class="text-blue-700 shrink-0" id="valTrALatex"></span>
+                            </div>
+                            <input type="range" id="trA" min="0" max="3.0" step="0.1" value="1.0" class="slider-blue">
+                        </div>
+
+                        <!-- a Slider A -->
+                        <div>
+                            <div class="flex justify-between items-baseline text-xs mb-1 gap-2">
+                                <label for="accA" class="font-medium text-slate-700" id="uiLabelAccA"></label>
+                                <span class="text-blue-700 shrink-0" id="valAccALatex"></span>
+                            </div>
+                            <input type="range" id="accA" min="1" max="10" step="0.5" value="5.0" class="slider-blue">
+                        </div>
+                    </div>
+
+                    <!-- Car B (Orange) Controls -->
+                    <div id="panelCarB" class="p-4 rounded-xl bg-orange-50/50 border border-orange-200/80 space-y-3.5 transition-opacity duration-200">
+                        <div class="flex flex-wrap items-center justify-between gap-1">
+                            <div class="flex items-center space-x-2">
+                                <span class="w-3 h-3 rounded-full bg-orange-600 shrink-0"></span>
+                                <h4 class="text-sm font-bold text-orange-950" id="uiCarBTitle"></h4>
+                            </div>
+                            <div class="flex items-center space-x-2">
+                                <button id="btnCopyAtoB" class="text-[11px] px-2 py-0.5 rounded bg-white border border-orange-200 text-orange-700 hover:bg-orange-100 transition"></button>
+                                <span class="text-xs text-orange-800 bg-orange-100/90 px-2.5 py-0.5 rounded-md font-semibold" id="badgeCarB"></span>
+                            </div>
+                        </div>
+
+                        <!-- v0 Slider B -->
+                        <div>
+                            <div class="flex justify-between items-baseline text-xs mb-1 gap-2">
+                                <label for="v0B" class="font-medium text-slate-700" id="uiLabelV0B"></label>
+                                <span class="text-orange-700 shrink-0" id="valV0BLatex"></span>
+                            </div>
+                            <input type="range" id="v0B" min="5" max="35" step="0.5" value="25" class="slider-orange">
+                        </div>
+
+                        <!-- tr Slider B -->
+                        <div>
+                            <div class="flex justify-between items-baseline text-xs mb-1 gap-2">
+                                <label for="trB" class="font-medium text-slate-700" id="uiLabelTrB"></label>
+                                <span class="text-orange-700 shrink-0" id="valTrBLatex"></span>
+                            </div>
+                            <input type="range" id="trB" min="0" max="3.0" step="0.1" value="1.3" class="slider-orange">
+                        </div>
+
+                        <!-- a Slider B -->
+                        <div>
+                            <div class="flex justify-between items-baseline text-xs mb-1 gap-2">
+                                <label for="accB" class="font-medium text-slate-700" id="uiLabelAccB"></label>
+                                <span class="text-orange-700 shrink-0" id="valAccBLatex"></span>
+                            </div>
+                            <input type="range" id="accB" min="1" max="10" step="0.5" value="5.0" class="slider-orange">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Real-Time Telemetry & Comparison Table -->
+                <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+                    <div class="px-5 py-3 border-b border-slate-100 bg-slate-50/60 flex justify-between items-center flex-wrap gap-2">
+                        <h3 class="text-xs font-bold uppercase tracking-wider text-slate-700" id="uiTableHeader"></h3>
+                        <span class="text-xs text-slate-600" id="tableTimeLatex"></span>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-xs text-left">
+                            <thead class="bg-slate-50 text-slate-600 border-b border-slate-100">
+                                <tr>
+                                    <th class="py-2.5 px-4 font-semibold" id="uiThQuantity"></th>
+                                    <th class="py-2.5 px-3 font-bold text-blue-700" id="uiThCarA"></th>
+                                    <th class="py-2.5 px-3 font-bold text-orange-700" id="uiThCarB"></th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-slate-100">
+                                <tr class="bg-blue-50/20">
+                                    <td class="py-2 px-4 font-medium text-slate-700" id="uiRowCurV"></td>
+                                    <td class="py-2 px-3 text-blue-700" id="curVA"></td>
+                                    <td class="py-2 px-3 text-orange-700" id="curVB"></td>
+                                </tr>
+                                <tr class="bg-blue-50/20">
+                                    <td class="py-2 px-4 font-medium text-slate-700" id="uiRowCurX"></td>
+                                    <td class="py-2 px-3 text-blue-700" id="curXA"></td>
+                                    <td class="py-2 px-3 text-orange-700" id="curXB"></td>
+                                </tr>
+                                <tr>
+                                    <td class="py-2 px-4 text-slate-600" id="uiRowDr"></td>
+                                    <td class="py-2 px-3 text-slate-800" id="statDrA"></td>
+                                    <td class="py-2 px-3 text-slate-800" id="statDrB"></td>
+                                </tr>
+                                <tr>
+                                    <td class="py-2 px-4 text-slate-600" id="uiRowDb"></td>
+                                    <td class="py-2 px-3 text-slate-800" id="statDbA"></td>
+                                    <td class="py-2 px-3 text-slate-800" id="statDbB"></td>
+                                </tr>
+                                <tr class="bg-slate-50/90">
+                                    <td class="py-2.5 px-4 font-bold text-slate-900" id="uiRowDt"></td>
+                                    <td class="py-2.5 px-3 text-blue-700 text-sm" id="statDtA"></td>
+                                    <td class="py-2.5 px-3 text-orange-700 text-sm" id="statDtB"></td>
+                                </tr>
+                                <tr>
+                                    <td class="py-2 px-4 text-slate-600" id="uiRowTt"></td>
+                                    <td class="py-2 px-3 text-slate-800" id="statTtA"></td>
+                                    <td class="py-2 px-3 text-slate-800" id="statTtB"></td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+
+        <!-- Bottom Section: Interactive High School Physics Problems -->
+        <section class="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 sm:p-6">
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-4 border-b border-slate-100">
+                <div>
+                    <h2 class="text-base font-bold text-slate-900 flex items-center gap-2">
+                        <svg class="w-5 h-5 text-blue-600 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"></path></svg>
+                        <span id="uiQuizSectionTitle"></span>
+                    </h2>
+                    <p class="text-xs text-slate-500 mt-1" id="uiQuizSectionSub"></p>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-5 mt-5">
+                <!-- Question 1 -->
+                <div class="rounded-xl border border-slate-200 p-4 flex flex-col justify-between bg-slate-50/40 hover:border-blue-300 transition">
+                    <div class="space-y-2.5">
+                        <div class="flex items-center justify-between gap-2">
+                            <span class="px-2.5 py-0.5 text-xs font-bold rounded-md bg-blue-100 text-blue-800" id="uiQ1Badge"></span>
+                            <button onclick="loadProblem(1)" class="text-xs text-blue-600 hover:text-blue-800 font-semibold flex items-center gap-1 shrink-0">
+                                <span id="uiQ1Btn"></span>
+                                <span>→</span>
+                            </button>
+                        </div>
+                        <div class="text-xs text-slate-700 leading-relaxed space-y-1" id="uiQ1Body"></div>
+                    </div>
+                    <div class="mt-4 pt-3 border-t border-slate-200/80">
+                        <details class="text-xs group">
+                            <summary class="cursor-pointer font-semibold text-slate-700 hover:text-blue-600 select-none" id="uiQ1Summary"></summary>
+                            <div class="mt-2 p-3 rounded-lg bg-white border border-slate-200 text-slate-700 space-y-1.5 leading-relaxed" id="uiQ1Sol"></div>
+                        </details>
+                    </div>
+                </div>
+
+                <!-- Question 2 -->
+                <div class="rounded-xl border border-slate-200 p-4 flex flex-col justify-between bg-slate-50/40 hover:border-blue-300 transition">
+                    <div class="space-y-2.5">
+                        <div class="flex items-center justify-between gap-2">
+                            <span class="px-2.5 py-0.5 text-xs font-bold rounded-md bg-orange-100 text-orange-800" id="uiQ2Badge"></span>
+                            <button onclick="loadProblem(2)" class="text-xs text-blue-600 hover:text-blue-800 font-semibold flex items-center gap-1 shrink-0">
+                                <span id="uiQ2Btn"></span>
+                                <span>→</span>
+                            </button>
+                        </div>
+                        <div class="text-xs text-slate-700 leading-relaxed space-y-1" id="uiQ2Body"></div>
+                    </div>
+                    <div class="mt-4 pt-3 border-t border-slate-200/80">
+                        <details class="text-xs group">
+                            <summary class="cursor-pointer font-semibold text-slate-700 hover:text-blue-600 select-none" id="uiQ2Summary"></summary>
+                            <div class="mt-2 p-3 rounded-lg bg-white border border-slate-200 text-slate-700 space-y-1.5 leading-relaxed" id="uiQ2Sol"></div>
+                        </details>
+                    </div>
+                </div>
+
+                <!-- Question 3 -->
+                <div class="rounded-xl border border-slate-200 p-4 flex flex-col justify-between bg-slate-50/40 hover:border-blue-300 transition">
+                    <div class="space-y-2.5">
+                        <div class="flex items-center justify-between gap-2">
+                            <span class="px-2.5 py-0.5 text-xs font-bold rounded-md bg-emerald-100 text-emerald-800" id="uiQ3Badge"></span>
+                            <button onclick="loadProblem(3)" class="text-xs text-blue-600 hover:text-blue-800 font-semibold flex items-center gap-1 shrink-0">
+                                <span id="uiQ3Btn"></span>
+                                <span>→</span>
+                            </button>
+                        </div>
+                        <div class="text-xs text-slate-700 leading-relaxed space-y-1" id="uiQ3Body"></div>
+                    </div>
+                    <div class="mt-4 pt-3 border-t border-slate-200/80">
+                        <details class="text-xs group">
+                            <summary class="cursor-pointer font-semibold text-slate-700 hover:text-blue-600 select-none" id="uiQ3Summary"></summary>
+                            <div class="mt-2 p-3 rounded-lg bg-white border border-slate-200 text-slate-700 space-y-1.5 leading-relaxed" id="uiQ3Sol"></div>
+                        </details>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <script>
+        /**
+         * 高中物理：汽車煞車與 v-t 圖互動模擬器
+         * 支援：
+         * 1. 全域 KaTeX (LaTeX) 數學公式、物理符號與單位渲染
+         * 2. 一鍵中英對照切換 (繁中 / 中英對照 Bilingual / English)
+         * 3. 雙車同步動畫、同圖比較與平滑自動縮放 (Auto-scaling)
+         */
+
+        // --- KaTeX 渲染輔助函式 ---
+        const latexCache = new Map();
+
+        function renderLatexInline(tex) {
+            if (!window.katex) return tex;
+            const cacheKey = `I:${tex}`;
+            if (latexCache.has(cacheKey)) return latexCache.get(cacheKey);
+            try {
+                const html = katex.renderToString(tex, { throwOnError: false, displayMode: false });
+                latexCache.set(cacheKey, html);
+                return html;
+            } catch (e) {
+                return tex;
+            }
+        }
+
+        // 將含有 $...$ 的混合中英文與公式字串轉換為 HTML
+        function formatRichLatex(str) {
+            if (!str) return '';
+            return str.replace(/\$([^$]+)\$/g, (_, tex) => renderLatexInline(tex));
+        }
+
+        function setRichLatex(elOrId, str) {
+            const el = typeof elOrId === 'string' ? document.getElementById(elOrId) : elOrId;
+            if (!el) return;
+            const html = formatRichLatex(str);
+            if (el.dataset.lastHtml !== html) {
+                el.innerHTML = html;
+                el.dataset.lastHtml = html;
+            }
+        }
+
+        function setPureLatex(elOrId, tex) {
+            const el = typeof elOrId === 'string' ? document.getElementById(elOrId) : elOrId;
+            if (!el) return;
+            if (el.dataset.lastTex !== tex) {
+                el.innerHTML = renderLatexInline(tex);
+                el.dataset.lastTex = tex;
+            }
+        }
+
+        // --- 多語系與中英對照字典 (i18n Dictionary) ---
+        const i18n = {
+            headerTitle: {
+                zh: '汽車煞車運動與 $v\\text{-}t$ 圖互動實驗室',
+                en: 'Car Braking Motion & $v\\text{-}t$ Graph Interactive Lab',
+                bi: '汽車煞車運動與 $v\\text{-}t$ 圖互動實驗室 | Car Braking & $v\\text{-}t$ Graph Lab'
+            },
+            headerSub: {
+                zh: '高中物理：勻速直線運動（反應時間 $t_r$）＋ 勻減速直線運動（制動減速度 $a$）',
+                en: 'High School Physics: Uniform Velocity (Reaction $t_r$) + Uniform Deceleration (Braking $a$)',
+                bi: '勻速直線運動（反應時間 Reaction Time $t_r$）＋ 勻減速直線運動（制動過程 Braking Deceleration $a$）'
+            },
+            presetReaction: {
+                zh: '範例：疲勞駕駛對比',
+                en: 'Preset: Tired Driver',
+                bi: '範例：疲勞駕駛 Tired Driver'
+            },
+            presetSpeed: {
+                zh: '範例：車速加倍對比',
+                en: 'Preset: Double Speed',
+                bi: '範例：車速加倍 Double Speed'
+            },
+            presetWet: {
+                zh: '範例：天雨路滑對比',
+                en: 'Preset: Wet Road',
+                bi: '範例：天雨路滑 Wet Road'
+            },
+            roadTitle: {
+                zh: '車道運動即時模擬（自動比例尺縮放）',
+                en: 'Real-Time Road Simulation (Auto-Scaling Track)',
+                bi: '車道運動即時模擬 Real-Time Road Simulation (自動縮圖 Auto-Scaling)'
+            },
+            legendCarA: {
+                zh: '車子 A (第一次煞車 / 藍線)',
+                en: 'Car A (1st Braking / Blue)',
+                bi: '車子 A Car A (第一次 1st / 藍線 Blue)'
+            },
+            legendCarB: {
+                zh: '車子 B (第二次煞車 / 橙線)',
+                en: 'Car B (2nd Braking / Orange)',
+                bi: '車子 B Car B (第二次 2nd / 橙線 Orange)'
+            },
+            legendBrakeLine: {
+                zh: '虛線標記 = 開始踩煞車位置 ($x = d_r$)',
+                en: 'Dashed Line = Braking Point ($x = d_r$)',
+                bi: '虛線標記 = 開始踩煞車位置 Braking Point ($x = d_r$)'
+            },
+            btnPlay: {
+                zh: '開始播放',
+                en: 'Play',
+                bi: '開始播放 Play'
+            },
+            btnPause: {
+                zh: '暫停',
+                en: 'Pause',
+                bi: '暫停 Pause'
+            },
+            btnReplay: {
+                zh: '重新播放',
+                en: 'Replay',
+                bi: '重新播放 Replay'
+            },
+            btnReset: {
+                zh: '重設 ($t = 0\\text{ s}$)',
+                en: 'Reset ($t = 0\\text{ s}$)',
+                bi: '重設 Reset ($t = 0\\text{ s}$)'
+            },
+            btnEnd: {
+                zh: '跳至完成',
+                en: 'Jump to End',
+                bi: '跳至完成 End'
+            },
+            speedLabel: {
+                zh: '播放速率：',
+                en: 'Speed:',
+                bi: '速率 Speed:'
+            },
+            vtGraphTitle: {
+                zh: '速度—時間關係圖 ($v\\text{-}t$ 圖)',
+                en: 'Velocity–Time Graph ($v\\text{-}t$ Graph)',
+                bi: '速度—時間關係圖 Velocity–Time ($v\\text{-}t$) Graph'
+            },
+            autoScaleBadge: {
+                zh: '自動縮圖',
+                en: 'Auto-Scale',
+                bi: '自動縮圖 Auto-Scale'
+            },
+            chkArea: {
+                zh: '顯示圖線下面積 (位移 $x$)',
+                en: 'Show Area (Displacement $x$)',
+                bi: '顯示面積 Area (位移 $x$)'
+            },
+            chkGhost: {
+                zh: '預覽完整軌跡虛線',
+                en: 'Preview Full Curve',
+                bi: '預覽完整圖線 Full Curve'
+            },
+            chkLiveZoom: {
+                zh: '隨時間動態縮放軸',
+                en: 'Dynamic Time Zoom',
+                bi: '動態縮放軸 Dynamic Zoom'
+            },
+            formulaReaction: {
+                zh: '<strong>反應距離 (矩形面積)：</strong> $d_r = v_0 t_r$',
+                en: '<strong>Thinking Dist. (Rect.):</strong> $d_r = v_0 t_r$',
+                bi: '<strong>反應距離 Thinking Dist.：</strong> $d_r = v_0 t_r$'
+            },
+            formulaBraking: {
+                zh: '<strong>制動距離 (三角形面積)：</strong> $d_b = \\dfrac{v_0^2}{2a}$',
+                en: '<strong>Braking Dist. (Triangle):</strong> $d_b = \\dfrac{v_0^2}{2a}$',
+                bi: '<strong>制動距離 Braking Dist.：</strong> $d_b = \\dfrac{v_0^2}{2a}$'
+            },
+            formulaSlope: {
+                zh: '<strong>斜率 (加速度)：</strong> $\\text{Slope} = -a$',
+                en: '<strong>Slope (Accel.):</strong> $\\text{Slope} = -a$',
+                bi: '<strong>斜率 Slope (加速度)：</strong> $m = -a$'
+            },
+            paramHeader: {
+                zh: '煞車參數設定',
+                en: 'Braking Parameters',
+                bi: '煞車參數設定 Braking Parameters'
+            },
+            enableCarBLabel: {
+                zh: '同圖顯示第二次煞車 (車B)',
+                en: 'Compare 2nd Braking (Car B)',
+                bi: '同圖對比車B Compare Car B'
+            },
+            carATitle: {
+                zh: '第一次煞車：車子 A (藍線)',
+                en: '1st Braking: Car A (Blue)',
+                bi: '第一次煞車：車子 A Car A (藍線 Blue)'
+            },
+            carBTitle: {
+                zh: '第二次煞車：車子 B (橙線)',
+                en: '2nd Braking: Car B (Orange)',
+                bi: '第二次煞車：車子 B Car B (橙線 Orange)'
+            },
+            copyAtoB: {
+                zh: '複製 A 參數',
+                en: 'Copy Car A',
+                bi: '複製 A Copy A'
+            },
+            labelV0: {
+                zh: '初速度 $v_0$ (勻速階段)',
+                en: 'Initial Velocity $v_0$ (Uniform)',
+                bi: '初速度 Initial Velocity $v_0$'
+            },
+            labelTr: {
+                zh: '反應時間 $t_r$ (維持勻速)',
+                en: 'Reaction Time $t_r$ (Thinking)',
+                bi: '反應時間 Reaction Time $t_r$'
+            },
+            labelAcc: {
+                zh: '減速度大小 $a$ (勻減速斜率)',
+                en: 'Deceleration $a$ (Braking)',
+                bi: '減速度大小 Deceleration $a$'
+            },
+            tableHeader: {
+                zh: '物理量即時對照表',
+                en: 'Real-Time Physics Telemetry',
+                bi: '物理量即時對照表 Physics Telemetry'
+            },
+            thQuantity: {
+                zh: '物理量 ($\\text{Symbol}$)',
+                en: 'Physical Quantity ($\\text{Symbol}$)',
+                bi: '物理量 Physical Quantity'
+            },
+            thCarA: {
+                zh: '車子 A (藍)',
+                en: 'Car A (Blue)',
+                bi: '車子 A Car A'
+            },
+            thCarB: {
+                zh: '車子 B (橙)',
+                en: 'Car B (Orange)',
+                bi: '車子 B Car B'
+            },
+            rowCurV: {
+                zh: '當前瞬時速度 $v(t)$',
+                en: 'Instantaneous Velocity $v(t)$',
+                bi: '瞬時速度 Instantaneous Velocity $v(t)$'
+            },
+            rowCurX: {
+                zh: '當前已行駛位移 $x(t)$',
+                en: 'Current Displacement $x(t)$',
+                bi: '當前位移 Current Displacement $x(t)$'
+            },
+            rowDr: {
+                zh: '反應距離 $d_r = v_0 t_r$',
+                en: 'Thinking Distance $d_r = v_0 t_r$',
+                bi: '反應距離 Thinking Distance $d_r = v_0 t_r$'
+            },
+            rowDb: {
+                zh: '制動距離 $d_b = \\dfrac{v_0^2}{2a}$',
+                en: 'Braking Distance $d_b = \\dfrac{v_0^2}{2a}$',
+                bi: '制動距離 Braking Distance $d_b = \\dfrac{v_0^2}{2a}$'
+            },
+            rowDt: {
+                zh: '總停車距離 $d_{\\text{total}} = d_r + d_b$',
+                en: 'Total Stopping Distance $d_{\\text{total}} = d_r + d_b$',
+                bi: '總停車距離 Stopping Distance $d_{\\text{total}}$'
+            },
+            rowTt: {
+                zh: '總煞車時間 $t_{\\text{total}} = t_r + \\dfrac{v_0}{a}$',
+                en: 'Total Stopping Time $t_{\\text{total}} = t_r + \\dfrac{v_0}{a}$',
+                bi: '總煞車時間 Total Time $t_{\\text{total}} = t_r + \\dfrac{v_0}{a}$'
+            },
+            quizSectionTitle: {
+                zh: '高中物理 $v\\text{-}t$ 圖實戰題目挑戰',
+                en: 'High School Physics $v\\text{-}t$ Graph Problem Bank',
+                bi: '高中物理 $v\\text{-}t$ 圖實戰題目挑戰 | Physics Problem Bank'
+            },
+            quizSectionSub: {
+                zh: '點擊「載入題目參數並模擬」即可將題目數據套用至上方模擬器，同步觀察車子運動與 $v\\text{-}t$ 圖線變化。',
+                en: 'Click "Load & Simulate" to apply the problem parameters to the simulator above and observe the $v\\text{-}t$ graph in real time.',
+                bi: '點擊「載入模擬 Load & Simulate」即可將題目數據套用至上方模擬器並觀察 $v\\text{-}t$ 圖線。'
+            },
+            loadQuizBtn: {
+                zh: '載入題目參數並模擬',
+                en: 'Load & Simulate',
+                bi: '載入模擬 Load & Simulate'
+            },
+            quizSummary: {
+                zh: '查看 LaTeX 詳解與 $v\\text{-}t$ 圖幾何意義',
+                en: 'View Step-by-Step LaTeX Solution & Graphical Meaning',
+                bi: '查看詳解 View Step-by-Step Solution'
+            },
+            // Question 1
+            q1Badge: {
+                zh: '題目一：基礎讀圖與面積計算',
+                en: 'Problem 1: Area Under v-t Graph',
+                bi: '題目一 Problem 1：基礎讀圖與面積計算'
+            },
+            q1Body: {
+                zh: `<p>汽車 A 以初速度 $v_0 = 20\\text{ m s}^{-1}$ 行駛。司機發現前方障礙物後，經過反應時間 $t_r = 0.8\\text{ s}$ 才踩下煞車，隨後以減速度大小 $a = 5\\text{ m s}^{-2}$ 勻減速直至完全停下。</p>
+                     <p class="font-semibold text-slate-900">求：(1) 反應距離 $d_r$；(2) 制動距離 $d_b$；(3) 總停車距離 $d_{\\text{total}}$。</p>`,
+                en: `<p>Car A travels at an initial velocity of $v_0 = 20\\text{ m s}^{-1}$. After spotting an obstacle, the driver takes a reaction time of $t_r = 0.8\\text{ s}$ before applying the brakes, decelerating uniformly at $a = 5\\text{ m s}^{-2}$ until coming to rest.</p>
+                     <p class="font-semibold text-slate-900">Find: (1) Thinking distance $d_r$; (2) Braking distance $d_b$; (3) Total stopping distance $d_{\\text{total}}$.</p>`,
+                bi: `<p>汽車 A 以初速度 $v_0 = 20\\text{ m s}^{-1}$ 行駛。司機經過反應時間 (Reaction time) $t_r = 0.8\\text{ s}$ 後踩下煞車，以減速度 (Deceleration) $a = 5\\text{ m s}^{-2}$ 勻減速至停止。</p>
+                     <p class="font-semibold text-slate-900">求 Find：(1) 反應距離 Thinking distance $d_r$；(2) 制動距離 Braking distance $d_b$；(3) 總停車距離 Stopping distance $d_{\\text{total}}$。</p>`
+            },
+            q1Sol: {
+                zh: `<p>1. <strong>反應距離 (矩形面積)：</strong><br>$d_r = v_0 t_r = 20\\text{ m s}^{-1} \\times 0.8\\text{ s} = \\mathbf{16.0\\text{ m}}$</p>
+                     <p>2. <strong>制動時間：</strong> $t_b = \\dfrac{v_0}{a} = \\dfrac{20}{5} = 4.0\\text{ s}$</p>
+                     <p>3. <strong>制動距離 (三角形面積)：</strong><br>$d_b = \\dfrac{1}{2} v_0 t_b = \\dfrac{v_0^2}{2a} = \\dfrac{20^2}{2 \\times 5} = \\mathbf{40.0\\text{ m}}$</p>
+                     <p>4. <strong>總停車距離 (梯形面積)：</strong><br>$d_{\\text{total}} = d_r + d_b = 16.0\\text{ m} + 40.0\\text{ m} = \\mathbf{56.0\\text{ m}}$</p>`,
+                en: `<p>1. <strong>Thinking Distance (Rectangle Area):</strong><br>$d_r = v_0 t_r = 20\\text{ m s}^{-1} \\times 0.8\\text{ s} = \\mathbf{16.0\\text{ m}}$</p>
+                     <p>2. <strong>Braking Time:</strong> $t_b = \\dfrac{v_0}{a} = \\dfrac{20}{5} = 4.0\\text{ s}$</p>
+                     <p>3. <strong>Braking Distance (Triangle Area):</strong><br>$d_b = \\dfrac{1}{2} v_0 t_b = \\dfrac{v_0^2}{2a} = \\dfrac{20^2}{2 \\times 5} = \\mathbf{40.0\\text{ m}}$</p>
+                     <p>4. <strong>Total Stopping Distance (Trapezium Area):</strong><br>$d_{\\text{total}} = d_r + d_b = 16.0\\text{ m} + 40.0\\text{ m} = \\mathbf{56.0\\text{ m}}$</p>`,
+                bi: `<p>1. <strong>反應距離 Thinking Distance (矩形面積)：</strong><br>$d_r = v_0 t_r = 20 \\times 0.8 = \\mathbf{16.0\\text{ m}}$</p>
+                     <p>2. <strong>制動時間 Braking Time：</strong> $t_b = \\dfrac{v_0}{a} = \\dfrac{20}{5} = 4.0\\text{ s}$</p>
+                     <p>3. <strong>制動距離 Braking Distance (三角形面積)：</strong><br>$d_b = \\dfrac{v_0^2}{2a} = \\dfrac{20^2}{2 \\times 5} = \\mathbf{40.0\\text{ m}}$</p>
+                     <p>4. <strong>總停車距離 Total Stopping Distance：</strong><br>$d_{\\text{total}} = d_r + d_b = 16.0 + 40.0 = \\mathbf{56.0\\text{ m}}$</p>`
+            },
+            // Question 2
+            q2Badge: {
+                zh: '題目二：車速加倍的危險性',
+                en: 'Problem 2: Doubling Initial Speed',
+                bi: '題目二 Problem 2：車速加倍 Doubling Speed'
+            },
+            q2Body: {
+                zh: `<p>同一輛車在相同路面（減速度 $a = 5\\text{ m s}^{-2}$，反應時間 $t_r = 1.0\\text{ s}$）：<br>
+                     • 第一次 (車A) 初速為 $v_{0A} = 15\\text{ m s}^{-1}$ ($54\\text{ km h}^{-1}$)<br>
+                     • 第二次 (車B) 初速加倍為 $v_{0B} = 30\\text{ m s}^{-1}$ ($108\\text{ km h}^{-1}$)</p>
+                     <p class="font-semibold text-slate-900">問：車B的「制動距離 $d_b$」是車A的幾倍？總停車距離相差多少？</p>`,
+                en: `<p>On the same road ($a = 5\\text{ m s}^{-2}$, reaction time $t_r = 1.0\\text{ s}$):<br>
+                     • Car A travels at $v_{0A} = 15\\text{ m s}^{-1}$ ($54\\text{ km h}^{-1}$)<br>
+                     • Car B doubles the speed to $v_{0B} = 30\\text{ m s}^{-1}$ ($108\\text{ km h}^{-1}$)</p>
+                     <p class="font-semibold text-slate-900">Find the ratio of braking distances $\\dfrac{d_{bB}}{d_{bA}}$ and the difference in total stopping distance.</p>`,
+                bi: `<p>相同路面 ($a = 5\\text{ m s}^{-2},\\ t_r = 1.0\\text{ s}$)：<br>
+                     • 車A 初速 $v_{0A} = 15\\text{ m s}^{-1}$ ($54\\text{ km h}^{-1}$)<br>
+                     • 車B 初速加倍 $v_{0B} = 30\\text{ m s}^{-1}$ ($108\\text{ km h}^{-1}$)</p>
+                     <p class="font-semibold text-slate-900">問：制動距離比值 $\\dfrac{d_{bB}}{d_{bA}}$ 為何？總停車距離相差多少？</p>`
+            },
+            q2Sol: {
+                zh: `<p>1. <strong>二次方關係：</strong> 由 $d_b = \\dfrac{v_0^2}{2a} \\propto v_0^2$，當 $v_0$ 變為 $2$ 倍，三角形的高與底同時變為 $2$ 倍，故<strong>制動距離變為 $2^2 = 4$ 倍</strong>！</p>
+                     <p>2. <strong>車A：</strong> $d_{rA} = 15\\text{ m},\\ d_{bA} = 22.5\\text{ m} \\implies d_{\\text{total},A} = \\mathbf{37.5\\text{ m}}$</p>
+                     <p>3. <strong>車B：</strong> $d_{rB} = 30\\text{ m},\\ d_{bB} = 90.0\\text{ m} \\implies d_{\\text{total},B} = \\mathbf{120.0\\text{ m}}$</p>
+                     <p>4. <strong>距離差：</strong> $\\Delta d_{\\text{total}} = 120.0\\text{ m} - 37.5\\text{ m} = \\mathbf{82.5\\text{ m}}$</p>`,
+                en: `<p>1. <strong>Quadratic Relation:</strong> Since $d_b = \\dfrac{v_0^2}{2a} \\propto v_0^2$, doubling $v_0$ doubles both the height and base of the braking triangle, so <strong>braking distance quadruples ($2^2 = 4\\times$)</strong>!</p>
+                     <p>2. <strong>Car A:</strong> $d_{rA} = 15\\text{ m},\\ d_{bA} = 22.5\\text{ m} \\implies d_{\\text{total},A} = \\mathbf{37.5\\text{ m}}$</p>
+                     <p>3. <strong>Car B:</strong> $d_{rB} = 30\\text{ m},\\ d_{bB} = 90.0\\text{ m} \\implies d_{\\text{total},B} = \\mathbf{120.0\\text{ m}}$</p>
+                     <p>4. <strong>Difference:</strong> $\\Delta d_{\\text{total}} = 120.0\\text{ m} - 37.5\\text{ m} = \\mathbf{82.5\\text{ m}}$</p>`,
+                bi: `<p>1. <strong>平方關係 Quadratic Relation：</strong> 由 $d_b = \\dfrac{v_0^2}{2a} \\propto v_0^2$，當初速 $v_0$ 加倍，<strong>制動距離變為 $2^2 = 4$ 倍 (Quadruples)</strong>！</p>
+                     <p>2. <strong>車A (Car A)：</strong> $d_{rA} = 15\\text{ m},\\ d_{bA} = 22.5\\text{ m} \\implies d_{\\text{total},A} = \\mathbf{37.5\\text{ m}}$</p>
+                     <p>3. <strong>車B (Car B)：</strong> $d_{rB} = 30\\text{ m},\\ d_{bB} = 90.0\\text{ m} \\implies d_{\\text{total},B} = \\mathbf{120.0\\text{ m}}$</p>
+                     <p>4. <strong>總距離差 Difference：</strong> $\\Delta d_{\\text{total}} = 120.0 - 37.5 = \\mathbf{82.5\\text{ m}}$</p>`
+            },
+            // Question 3
+            q3Badge: {
+                zh: '題目三：乾燥路面 vs 天雨路滑',
+                en: 'Problem 3: Dry vs. Wet Road',
+                bi: '題目三 Problem 3：天雨路滑 Dry vs. Wet Road'
+            },
+            q3Body: {
+                zh: `<p>兩次煞車初速皆為 $v_0 = 24\\text{ m s}^{-1}$，反應時間皆為 $t_r = 0.8\\text{ s}$。乾燥路面減速度為 $a_A = 6\\text{ m s}^{-2}$；雨天路滑時輪胎抓地力下降，減速度變為 $a_B = 3\\text{ m s}^{-2}$。</p>
+                     <p class="font-semibold text-slate-900">觀察 $v\\text{-}t$ 圖：兩圖線哪一部分重合？斜率與面積有何變化？</p>`,
+                en: `<p>Both cars have $v_0 = 24\\text{ m s}^{-1}$ and $t_r = 0.8\\text{ s}$. On a dry road, deceleration is $a_A = 6\\text{ m s}^{-2}$; on a wet slippery road, deceleration drops to $a_B = 3\\text{ m s}^{-2}$.</p>
+                     <p class="font-semibold text-slate-900">Observe the $v\\text{-}t$ graph: Which segment overlaps? How do the slopes and areas compare?</p>`,
+                bi: `<p>兩車初速皆為 $v_0 = 24\\text{ m s}^{-1}$，反應時間 $t_r = 0.8\\text{ s}$。乾地減速度 $a_A = 6\\text{ m s}^{-2}$；雨天路滑減速度降至 $a_B = 3\\text{ m s}^{-2}$。</p>
+                     <p class="font-semibold text-slate-900">觀察 $v\\text{-}t$ 圖：哪一段重合？斜率 (Slope) 與面積 (Area) 如何變化？</p>`
+            },
+            q3Sol: {
+                zh: `<p>1. <strong>重合部分：</strong> $0 \\sim 0.8\\text{ s}$ 的水平勻速線段完全重合，反應距離皆為 $d_r = 24 \\times 0.8 = \\mathbf{19.2\\text{ m}}$。</p>
+                     <p>2. <strong>斜率與制動距離：</strong> 車B斜率為 $-3\\text{ m s}^{-2}$（較平緩），制動時間由 $t_{bA} = 4.0\\text{ s}$ 倍增為 $t_{bB} = 8.0\\text{ s}$，制動距離由 $d_{bA} = 48.0\\text{ m}$ 倍增為 $d_{bB} = \\mathbf{96.0\\text{ m}}$！</p>`,
+                en: `<p>1. <strong>Overlapping Segment:</strong> The horizontal line from $0$ to $0.8\\text{ s}$ overlaps completely, with thinking distance $d_r = 24 \\times 0.8 = \\mathbf{19.2\\text{ m}}$.</p>
+                     <p>2. <strong>Slope & Braking Distance:</strong> Car B has a gentler slope ($-3\\text{ m s}^{-2}$), doubling braking time from $4.0\\text{ s}$ to $8.0\\text{ s}$ and doubling braking distance from $48.0\\text{ m}$ to $\\mathbf{96.0\\text{ m}}$!</p>`,
+                bi: `<p>1. <strong>重合部分 Overlap：</strong> $0 \\sim 0.8\\text{ s}$ 水平線段完全重合，反應距離皆為 $d_r = 24 \\times 0.8 = \\mathbf{19.2\\text{ m}}$。</p>
+                     <p>2. <strong>斜率與面積 Slope & Area：</strong> 車B斜率較平緩 ($-3\\text{ m s}^{-2}$)，制動時間由 $4.0\\text{ s}$ 倍增至 $8.0\\text{ s}$，制動距離由 $48.0\\text{ m}$ 倍增至 $\\mathbf{96.0\\text{ m}}$！</p>`
+            }
+        };
+
+        // --- 狀態管理 (State) ---
+        const state = {
+            lang: 'bi', // 'zh' | 'bi' | 'en' (預設開啟一鍵中英對照 Bilingual 模式)
+            carA: { v0: 20.0, tr: 1.0, acc: 5.0, color: '#2563eb', lightColor: 'rgba(37, 99, 235, 0.14)', secondaryColor: 'rgba(37, 99, 235, 0.26)' },
+            carB: { enabled: true, v0: 25.0, tr: 1.3, acc: 5.0, color: '#ea580c', lightColor: 'rgba(234, 88, 12, 0.14)', secondaryColor: 'rgba(234, 88, 12, 0.26)' },
+            sim: {
+                t: 0,
+                playing: false,
+                speed: 1.0,
+                lastFrameTime: null
+            },
+            options: {
+                showArea: true,
+                showGhost: false,
+                liveZoom: true
+            },
+            viewport: {
+                vtMaxT: 6.0,
+                vtMaxV: 30.0,
+                roadMaxX: 100.0
+            },
+            hoverTime: null
+        };
+
+        function tStr(key) {
+            return i18n[key] ? i18n[key][state.lang] : key;
+        }
+
+        // --- 物理計算輔助函式 ---
+        function getCarMetrics(car) {
+            const tb = car.v0 / car.acc; // 減速所需時間
+            const tTotal = car.tr + tb;  // 總時間
+            const dr = car.v0 * car.tr;  // 反應距離 (勻速位移)
+            const db = (car.v0 * car.v0) / (2 * car.acc); // 制動距離 (勻減速位移)
+            const dTotal = dr + db;      // 總停車距離
+            return { tb, tTotal, dr, db, dTotal };
+        }
+
+        function getCarStateAtTime(car, t) {
+            const m = getCarMetrics(car);
+            if (t <= 0) {
+                return { v: car.v0, x: 0, phase: 'ready', isBraking: false, isStopped: false };
+            } else if (t <= car.tr) {
+                return {
+                    v: car.v0,
+                    x: car.v0 * t,
+                    phase: 'reaction',
+                    isBraking: false,
+                    isStopped: false
+                };
+            } else if (t < m.tTotal) {
+                const dt = t - car.tr;
+                const v = Math.max(0, car.v0 - car.acc * dt);
+                const x = m.dr + car.v0 * dt - 0.5 * car.acc * dt * dt;
+                return {
+                    v,
+                    x,
+                    phase: 'braking',
+                    isBraking: true,
+                    isStopped: false
+                };
+            } else {
+                return {
+                    v: 0,
+                    x: m.dTotal,
+                    phase: 'stopped',
+                    isBraking: false,
+                    isStopped: true
+                };
+            }
+        }
+
+        function getMaxSimTime() {
+            const mA = getCarMetrics(state.carA);
+            if (!state.carB.enabled) return mA.tTotal;
+            const mB = getCarMetrics(state.carB);
+            return Math.max(mA.tTotal, mB.tTotal);
+        }
+
+        // --- DOM 元素綁定 ---
+        const roadCanvas = document.getElementById('roadCanvas');
+        const vtCanvas = document.getElementById('vtCanvas');
+        const roadCtx = roadCanvas.getContext('2d');
+        const vtCtx = vtCanvas.getContext('2d');
+
+        function resizeCanvases() {
+            const dpr = window.devicePixelRatio || 1;
+            [roadCanvas, vtCanvas].forEach(canvas => {
+                const rect = canvas.getBoundingClientRect();
+                canvas.width = rect.width * dpr;
+                canvas.height = rect.height * dpr;
+                const ctx = canvas.getContext('2d');
+                ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+            });
+        }
+
+        // --- 套用靜態多語系與 LaTeX 標籤 ---
+        function applyStaticLanguageUI() {
+            // 渲染擁有 data-latex 屬性的固定元素
+            document.querySelectorAll('[data-latex]').forEach(el => {
+                setPureLatex(el, el.getAttribute('data-latex'));
+            });
+
+            setRichLatex('uiHeaderTitle', tStr('headerTitle'));
+            setRichLatex('uiHeaderSub', tStr('headerSub'));
+            setRichLatex('btnPresetReaction', tStr('presetReaction'));
+            setRichLatex('btnPresetSpeed', tStr('presetSpeed'));
+            setRichLatex('btnPresetWet', tStr('presetWet'));
+
+            setRichLatex('uiRoadTitle', tStr('roadTitle'));
+            setRichLatex('uiLegendCarA', tStr('legendCarA'));
+            setRichLatex('uiLegendCarB', tStr('legendCarB'));
+            setRichLatex('uiLegendBrakeLine', tStr('legendBrakeLine'));
+
+            setRichLatex('uiBtnReset', tStr('btnReset'));
+            setRichLatex('uiBtnEnd', tStr('btnEnd'));
+            setRichLatex('uiSpeedLabel', tStr('speedLabel'));
+
+            setRichLatex('uiVtGraphTitle', tStr('vtGraphTitle'));
+            setRichLatex('uiAutoScaleBadge', tStr('autoScaleBadge'));
+            setRichLatex('uiChkArea', tStr('chkArea'));
+            setRichLatex('uiChkGhost', tStr('chkGhost'));
+            setRichLatex('uiChkLiveZoom', tStr('chkLiveZoom'));
+
+            setRichLatex('uiFormulaReaction', tStr('formulaReaction'));
+            setRichLatex('uiFormulaBraking', tStr('formulaBraking'));
+            setRichLatex('uiFormulaSlope', tStr('formulaSlope'));
+
+            setRichLatex('uiParamHeader', tStr('paramHeader'));
+            setRichLatex('uiEnableCarBLabel', tStr('enableCarBLabel'));
+            setRichLatex('uiCarATitle', tStr('carATitle'));
+            setRichLatex('uiCarBTitle', tStr('carBTitle'));
+            setRichLatex('btnCopyAtoB', tStr('copyAtoB'));
+
+            setRichLatex('uiLabelV0A', tStr('labelV0'));
+            setRichLatex('uiLabelTrA', tStr('labelTr'));
+            setRichLatex('uiLabelAccA', tStr('labelAcc'));
+            setRichLatex('uiLabelV0B', tStr('labelV0'));
+            setRichLatex('uiLabelTrB', tStr('labelTr'));
+            setRichLatex('uiLabelAccB', tStr('labelAcc'));
+
+            setRichLatex('uiTableHeader', tStr('tableHeader'));
+            setRichLatex('uiThQuantity', tStr('thQuantity'));
+            setRichLatex('uiThCarA', tStr('thCarA'));
+            setRichLatex('uiThCarB', tStr('thCarB'));
+
+            setRichLatex('uiRowCurV', tStr('rowCurV'));
+            setRichLatex('uiRowCurX', tStr('rowCurX'));
+            setRichLatex('uiRowDr', tStr('rowDr'));
+            setRichLatex('uiRowDb', tStr('rowDb'));
+            setRichLatex('uiRowDt', tStr('rowDt'));
+            setRichLatex('uiRowTt', tStr('rowTt'));
+
+            setRichLatex('uiQuizSectionTitle', tStr('quizSectionTitle'));
+            setRichLatex('uiQuizSectionSub', tStr('quizSectionSub'));
+
+            setRichLatex('uiQ1Badge', tStr('q1Badge'));
+            setRichLatex('uiQ1Btn', tStr('loadQuizBtn'));
+            setRichLatex('uiQ1Body', tStr('q1Body'));
+            setRichLatex('uiQ1Summary', tStr('quizSummary'));
+            setRichLatex('uiQ1Sol', tStr('q1Sol'));
+
+            setRichLatex('uiQ2Badge', tStr('q2Badge'));
+            setRichLatex('uiQ2Btn', tStr('loadQuizBtn'));
+            setRichLatex('uiQ2Body', tStr('q2Body'));
+            setRichLatex('uiQ2Summary', tStr('quizSummary'));
+            setRichLatex('uiQ2Sol', tStr('q2Sol'));
+
+            setRichLatex('uiQ3Badge', tStr('q3Badge'));
+            setRichLatex('uiQ3Btn', tStr('loadQuizBtn'));
+            setRichLatex('uiQ3Body', tStr('q3Body'));
+            setRichLatex('uiQ3Summary', tStr('quizSummary'));
+            setRichLatex('uiQ3Sol', tStr('q3Sol'));
+
+            updateUIText();
+        }
+
+        // --- 更新動態數值面板與表格 (全部使用 KaTeX LaTeX 格式) ---
+        function updateUIText() {
+            const mA = getCarMetrics(state.carA);
+            const mB = getCarMetrics(state.carB);
+            const maxT = getMaxSimTime();
+
+            // Sliders Readout A (LaTeX)
+            const kmhA = (state.carA.v0 * 3.6).toFixed(1);
+            setPureLatex('valV0ALatex', `\\mathbf{${state.carA.v0.toFixed(1)}\\text{ m s}^{-1}}\\ \\left(${kmhA}\\text{ km h}^{-1}\\right)`);
+            setPureLatex('valTrALatex', `\\mathbf{${state.carA.tr.toFixed(1)}\\text{ s}}`);
+            setPureLatex('valAccALatex', `\\mathbf{${state.carA.acc.toFixed(1)}\\text{ m s}^{-2}}`);
+            setPureLatex('badgeCarA', `d_{\\text{total}} = ${mA.dTotal.toFixed(1)}\\text{ m}`);
+
+            // Sliders Readout B (LaTeX)
+            const kmhB = (state.carB.v0 * 3.6).toFixed(1);
+            setPureLatex('valV0BLatex', `\\mathbf{${state.carB.v0.toFixed(1)}\\text{ m s}^{-1}}\\ \\left(${kmhB}\\text{ km h}^{-1}\\right)`);
+            setPureLatex('valTrBLatex', `\\mathbf{${state.carB.tr.toFixed(1)}\\text{ s}}`);
+            setPureLatex('valAccBLatex', `\\mathbf{${state.carB.acc.toFixed(1)}\\text{ m s}^{-2}}`);
+            setPureLatex('badgeCarB', `d_{\\text{total}} = ${mB.dTotal.toFixed(1)}\\text{ m}`);
+
+            // Scrubber & Time Readout (LaTeX)
+            const scrubber = document.getElementById('timeScrubber');
+            scrubber.max = maxT.toFixed(2);
+            scrubber.value = state.sim.t;
+            setPureLatex('timeReadoutLatex', `t = \\mathbf{${state.sim.t.toFixed(2)}\\text{ s}}`);
+            setPureLatex('maxTimeReadoutLatex', `/\\ ${maxT.toFixed(2)}\\text{ s}`);
+            setPureLatex('tableTimeLatex', `t = \\mathbf{${state.sim.t.toFixed(2)}\\text{ s}}`);
+
+            // Instantaneous & Summary Table Values (LaTeX)
+            const instA = getCarStateAtTime(state.carA, state.sim.t);
+            const instB = getCarStateAtTime(state.carB, state.sim.t);
+
+            setPureLatex('curVA', `\\mathbf{${instA.v.toFixed(1)}\\text{ m s}^{-1}}`);
+            setPureLatex('curXA', `\\mathbf{${instA.x.toFixed(1)}\\text{ m}}`);
+            setPureLatex('statDrA', `${mA.dr.toFixed(1)}\\text{ m}`);
+            setPureLatex('statDbA', `${mA.db.toFixed(1)}\\text{ m}`);
+            setPureLatex('statDtA', `\\mathbf{${mA.dTotal.toFixed(1)}\\text{ m}}`);
+            setPureLatex('statTtA', `${mA.tTotal.toFixed(2)}\\text{ s}`);
+
+            if (state.carB.enabled) {
+                setPureLatex('curVB', `\\mathbf{${instB.v.toFixed(1)}\\text{ m s}^{-1}}`);
+                setPureLatex('curXB', `\\mathbf{${instB.x.toFixed(1)}\\text{ m}}`);
+                setPureLatex('statDrB', `${mB.dr.toFixed(1)}\\text{ m}`);
+                setPureLatex('statDbB', `${mB.db.toFixed(1)}\\text{ m}`);
+                setPureLatex('statDtB', `\\mathbf{${mB.dTotal.toFixed(1)}\\text{ m}}`);
+                setPureLatex('statTtB', `${mB.tTotal.toFixed(2)}\\text{ s}`);
+            } else {
+                ['curVB', 'curXB', 'statDrB', 'statDbB', 'statDtB', 'statTtB'].forEach(id => {
+                    setPureLatex(id, `\\text{—}`);
+                });
+            }
+
+            // Play/Pause button UI
+            const iconPlay = document.getElementById('iconPlay');
+            const iconPause = document.getElementById('iconPause');
+            if (state.sim.playing) {
+                iconPlay.classList.add('hidden');
+                iconPause.classList.remove('hidden');
+                setRichLatex('playBtnText', tStr('btnPause'));
+            } else {
+                iconPlay.classList.remove('hidden');
+                iconPause.classList.add('hidden');
+                const isAtEnd = (state.sim.t >= maxT - 0.01 && maxT > 0);
+                setRichLatex('playBtnText', isAtEnd ? tStr('btnReplay') : tStr('btnPlay'));
+            }
+        }
+
+        // --- 計算合理的刻度間距 ---
+        function getNiceStep(maxVal, targetTicks = 6) {
+            const rawStep = maxVal / targetTicks;
+            const mag = Math.pow(10, Math.floor(Math.log10(rawStep)));
+            const residual = rawStep / mag;
+            if (residual > 5) return 10 * mag;
+            if (residual > 2) return 5 * mag;
+            if (residual > 1) return 2 * mag;
+            return mag;
+        }
+
+        // --- 平滑更新自動縮放邊界 (Auto-Scaling Viewport) ---
+        function updateAutoScaleViewport() {
+            const mA = getCarMetrics(state.carA);
+            const mB = getCarMetrics(state.carB);
+
+            const fullMaxT = state.carB.enabled ? Math.max(mA.tTotal, mB.tTotal) : mA.tTotal;
+            const fullMaxV = state.carB.enabled ? Math.max(state.carA.v0, state.carB.v0) : state.carA.v0;
+            const fullMaxX = state.carB.enabled ? Math.max(mA.dTotal, mB.dTotal) : mA.dTotal;
+
+            let targetMaxT = fullMaxT * 1.08;
+            if (state.options.liveZoom && !state.options.showGhost) {
+                const minWindowT = Math.min(2.5, fullMaxT * 1.08);
+                targetMaxT = Math.max(minWindowT, state.sim.t * 1.12);
+                targetMaxT = Math.min(targetMaxT, fullMaxT * 1.08);
+                if (state.sim.t === 0) targetMaxT = Math.max(3.0, fullMaxT * 0.5);
+            }
+
+            const targetMaxV = Math.max(10, fullMaxV * 1.18);
+            const targetMaxX = Math.max(25, fullMaxX * 1.14);
+
+            const lerp = 0.22;
+            state.viewport.vtMaxT += (targetMaxT - state.viewport.vtMaxT) * lerp;
+            state.viewport.vtMaxV += (targetMaxV - state.viewport.vtMaxV) * lerp;
+            state.viewport.roadMaxX += (targetMaxX - state.viewport.roadMaxX) * lerp;
+        }
+
+        // --- 繪製車道動畫 (Road Animation Canvas) ---
+        function drawRoad() {
+            const rect = roadCanvas.getBoundingClientRect();
+            const w = rect.width;
+            const h = rect.height;
+            roadCtx.clearRect(0, 0, w, h);
+
+            const padLeft = 56;
+            const padRight = 40;
+            const roadWidth = w - padLeft - padRight;
+            const maxX = state.viewport.roadMaxX;
+
+            const xToPx = (x) => padLeft + (x / maxX) * roadWidth;
+
+            const laneTop = 28;
+            const laneHeight = state.carB.enabled ? (h - 64) / 2 : (h - 64);
+            const roadBottom = state.carB.enabled ? laneTop + laneHeight * 2 : laneTop + laneHeight;
+
+            // 繪製路面底色
+            roadCtx.fillStyle = '#f1f5f9';
+            roadCtx.fillRect(padLeft - 38, laneTop, roadWidth + 58, roadBottom - laneTop);
+
+            // 繪製車道邊界線
+            roadCtx.strokeStyle = '#cbd5e1';
+            roadCtx.lineWidth = 2;
+            roadCtx.beginPath();
+            roadCtx.moveTo(padLeft - 38, laneTop);
+            roadCtx.lineTo(w - 16, laneTop);
+            roadCtx.moveTo(padLeft - 38, roadBottom);
+            roadCtx.lineTo(w - 16, roadBottom);
+            roadCtx.stroke();
+
+            // 雙車道分隔線
+            if (state.carB.enabled) {
+                roadCtx.save();
+                roadCtx.strokeStyle = '#cbd5e1';
+                roadCtx.lineWidth = 1.5;
+                roadCtx.setLineDash([8, 8]);
+                roadCtx.beginPath();
+                roadCtx.moveTo(padLeft - 38, laneTop + laneHeight);
+                roadCtx.lineTo(w - 16, laneTop + laneHeight);
+                roadCtx.stroke();
+                roadCtx.restore();
+            }
+
+            // 繪製距離標尺刻度
+            const stepX = getNiceStep(maxX, Math.max(4, Math.floor(roadWidth / 95)));
+            roadCtx.fillStyle = '#64748b';
+            roadCtx.font = '11px Inter, sans-serif';
+            roadCtx.textAlign = 'center';
+
+            for (let dist = 0; dist <= maxX; dist += stepX) {
+                const px = xToPx(dist);
+                roadCtx.strokeStyle = dist === 0 ? '#94a3b8' : '#e2e8f0';
+                roadCtx.lineWidth = dist === 0 ? 2 : 1;
+                roadCtx.beginPath();
+                roadCtx.moveTo(px, laneTop);
+                roadCtx.lineTo(px, roadBottom + 6);
+                roadCtx.stroke();
+
+                roadCtx.fillText(`${Math.round(dist)} m`, px, roadBottom + 20);
+            }
+
+            // 起點線標示 (x = 0 m)
+            roadCtx.save();
+            roadCtx.fillStyle = '#475569';
+            roadCtx.font = 'bold 11px Inter, "Noto Sans TC", sans-serif';
+            roadCtx.textAlign = 'center';
+            const startLabel = state.lang === 'en' ? 'Start x = 0 m' : (state.lang === 'zh' ? '起點 x = 0 m' : '起點 Start x = 0 m');
+            roadCtx.fillText(startLabel, xToPx(0), laneTop - 8);
+            roadCtx.restore();
+
+            // 繪製單一車道內的軌跡、煞車點與汽車
+            function renderCarOnLane(car, laneIndex, label) {
+                const m = getCarMetrics(car);
+                const inst = getCarStateAtTime(car, state.sim.t);
+                const cy = laneTop + laneHeight * (laneIndex + 0.5);
+
+                const startPx = xToPx(0);
+                const brakePx = xToPx(m.dr);
+                const curPx = xToPx(inst.x);
+
+                // 1. 已經走過的反應距離軌跡帶
+                const drawnReactionX = Math.min(inst.x, m.dr);
+                if (drawnReactionX > 0) {
+                    roadCtx.fillStyle = car.lightColor;
+                    roadCtx.fillRect(startPx, cy - 12, xToPx(drawnReactionX) - startPx, 24);
+                }
+
+                // 2. 已經走過的制動距離軌跡帶
+                if (inst.x > m.dr) {
+                    roadCtx.fillStyle = car.secondaryColor;
+                    roadCtx.fillRect(brakePx, cy - 12, curPx - brakePx, 24);
+
+                    roadCtx.save();
+                    roadCtx.strokeStyle = car.color;
+                    roadCtx.globalAlpha = 0.45;
+                    roadCtx.lineWidth = 2;
+                    roadCtx.setLineDash([4, 3]);
+                    roadCtx.beginPath();
+                    roadCtx.moveTo(brakePx, cy - 6);
+                    roadCtx.lineTo(curPx, cy - 6);
+                    roadCtx.moveTo(brakePx, cy + 6);
+                    roadCtx.lineTo(curPx, cy + 6);
+                    roadCtx.stroke();
+                    roadCtx.restore();
+                }
+
+                // 3. 踩煞車位置標記線 (d_r)
+                if (state.sim.t >= car.tr || state.options.showGhost) {
+                    roadCtx.save();
+                    roadCtx.strokeStyle = car.color;
+                    roadCtx.lineWidth = 1.5;
+                    roadCtx.setLineDash([3, 3]);
+                    roadCtx.beginPath();
+                    roadCtx.moveTo(brakePx, cy - laneHeight * 0.42);
+                    roadCtx.lineTo(brakePx, cy + laneHeight * 0.42);
+                    roadCtx.stroke();
+
+                    roadCtx.fillStyle = car.color;
+                    roadCtx.font = '600 10px Inter, "Noto Sans TC", sans-serif';
+                    roadCtx.textAlign = 'center';
+                    const brakeTxt = state.lang === 'en'
+                        ? `Brake d_r = ${m.dr.toFixed(1)} m`
+                        : `煞車點 d_r = ${m.dr.toFixed(1)} m`;
+                    roadCtx.fillText(brakeTxt, brakePx, cy - laneHeight * 0.30);
+                    roadCtx.restore();
+                }
+
+                // 4. 繪製小汽車
+                const carW = 38;
+                const carH = 20;
+                const carLeft = curPx - carW;
+                const carTop = cy - carH / 2;
+
+                roadCtx.save();
+                roadCtx.fillStyle = 'rgba(15, 23, 42, 0.12)';
+                roadCtx.beginPath();
+                roadCtx.roundRect(carLeft + 1, carTop + 2, carW, carH, 6);
+                roadCtx.fill();
+
+                roadCtx.fillStyle = car.color;
+                roadCtx.beginPath();
+                roadCtx.roundRect(carLeft, carTop, carW, carH, 6);
+                roadCtx.fill();
+
+                roadCtx.fillStyle = '#e0f2fe';
+                roadCtx.beginPath();
+                roadCtx.roundRect(carLeft + 8, carTop + 3, 22, carH - 6, 3);
+                roadCtx.fill();
+
+                roadCtx.fillStyle = '#0f172a';
+                roadCtx.font = 'bold 10px Inter, sans-serif';
+                roadCtx.textAlign = 'center';
+                roadCtx.textBaseline = 'middle';
+                roadCtx.fillText(label, carLeft + 19, cy);
+
+                if (inst.isBraking) {
+                    roadCtx.fillStyle = '#ef4444';
+                    roadCtx.shadowColor = '#ef4444';
+                    roadCtx.shadowBlur = 8;
+                    roadCtx.fillRect(carLeft - 2, carTop + 2, 3, 5);
+                    roadCtx.fillRect(carLeft - 2, carTop + carH - 7, 3, 5);
+                }
+                roadCtx.restore();
+
+                // 5. 車子前方的即時資訊標籤
+                roadCtx.save();
+                roadCtx.fillStyle = '#0f172a';
+                roadCtx.font = '600 11px Inter, "Noto Sans TC", sans-serif';
+                roadCtx.textAlign = 'left';
+                roadCtx.textBaseline = 'middle';
+                const stopWord = state.lang === 'en' ? 'Stopped' : (state.lang === 'zh' ? '已停止' : '停止 Stopped');
+                const statusText = inst.isStopped
+                    ? `${stopWord} (x = ${inst.x.toFixed(1)} m)`
+                    : `v = ${inst.v.toFixed(1)} m s⁻¹ (x = ${inst.x.toFixed(1)} m)`;
+                roadCtx.fillText(statusText, curPx + 8, cy);
+                roadCtx.restore();
+            }
+
+            renderCarOnLane(state.carA, 0, 'A');
+            if (state.carB.enabled) {
+                renderCarOnLane(state.carB, 1, 'B');
+            }
+        }
+
+        // --- 繪製動態自動縮放 v-t 圖 (v-t Graph Canvas) ---
+        function drawVTGraph() {
+            const rect = vtCanvas.getBoundingClientRect();
+            const w = rect.width;
+            const h = rect.height;
+            vtCtx.clearRect(0, 0, w, h);
+
+            const padLeft = 56;
+            const padRight = 30;
+            const padTop = 30;
+            const padBottom = 44;
+            const plotW = w - padLeft - padRight;
+            const plotH = h - padTop - padBottom;
+
+            const maxT = state.viewport.vtMaxT;
+            const maxV = state.viewport.vtMaxV;
+
+            const tToX = (t) => padLeft + (t / maxT) * plotW;
+            const vToY = (v) => padTop + plotH - (v / maxV) * plotH;
+
+            // 1. 繪製背景網格線與座標刻度
+            const stepT = getNiceStep(maxT, Math.max(5, Math.floor(plotW / 75)));
+            const stepV = getNiceStep(maxV, Math.max(5, Math.floor(plotH / 50)));
+
+            vtCtx.lineWidth = 1;
+            vtCtx.font = '11px Inter, sans-serif';
+
+            // 垂直時間網格線 (t)
+            vtCtx.textAlign = 'center';
+            vtCtx.textBaseline = 'top';
+            for (let tVal = 0; tVal <= maxT; tVal += stepT) {
+                const x = tToX(tVal);
+                vtCtx.strokeStyle = '#f1f5f9';
+                vtCtx.beginPath();
+                vtCtx.moveTo(x, padTop);
+                vtCtx.lineTo(x, padTop + plotH);
+                vtCtx.stroke();
+
+                vtCtx.fillStyle = '#64748b';
+                const label = stepT < 1 ? tVal.toFixed(1) : Math.round(tVal);
+                vtCtx.fillText(`${label}`, x, padTop + plotH + 8);
+            }
+
+            // 水平速度網格線 (v)
+            vtCtx.textAlign = 'right';
+            vtCtx.textBaseline = 'middle';
+            for (let vVal = 0; vVal <= maxV; vVal += stepV) {
+                const y = vToY(vVal);
+                vtCtx.strokeStyle = '#f1f5f9';
+                vtCtx.beginPath();
+                vtCtx.moveTo(padLeft, y);
+                vtCtx.lineTo(padLeft + plotW, y);
+                vtCtx.stroke();
+
+                vtCtx.fillStyle = '#64748b';
+                const label = stepV < 1 ? vVal.toFixed(1) : Math.round(vVal);
+                vtCtx.fillText(`${label}`, padLeft - 8, y);
+            }
+
+            // 2. 繪製單台車的面積與 v-t 圖線
+            function renderCarCurve(car, labelPrefix) {
+                const m = getCarMetrics(car);
+                const curT = Math.min(state.sim.t, m.tTotal);
+
+                // (A) 預覽完整虛線軌跡
+                if (state.options.showGhost) {
+                    vtCtx.save();
+                    vtCtx.strokeStyle = car.color;
+                    vtCtx.globalAlpha = 0.3;
+                    vtCtx.lineWidth = 2;
+                    vtCtx.setLineDash([5, 5]);
+                    vtCtx.beginPath();
+                    vtCtx.moveTo(tToX(0), vToY(car.v0));
+                    vtCtx.lineTo(tToX(car.tr), vToY(car.v0));
+                    vtCtx.lineTo(tToX(m.tTotal), vToY(0));
+                    vtCtx.stroke();
+                    vtCtx.restore();
+                }
+
+                // (B) 圖線下方的面積著色
+                if (state.options.showArea && curT > 0) {
+                    vtCtx.save();
+                    const tPhase1 = Math.min(curT, car.tr);
+                    if (tPhase1 > 0) {
+                        vtCtx.fillStyle = car.lightColor;
+                        vtCtx.beginPath();
+                        vtCtx.moveTo(tToX(0), vToY(0));
+                        vtCtx.lineTo(tToX(0), vToY(car.v0));
+                        vtCtx.lineTo(tToX(tPhase1), vToY(car.v0));
+                        vtCtx.lineTo(tToX(tPhase1), vToY(0));
+                        vtCtx.closePath();
+                        vtCtx.fill();
+                    }
+
+                    if (curT > car.tr) {
+                        const inst = getCarStateAtTime(car, curT);
+                        vtCtx.fillStyle = car.secondaryColor;
+                        vtCtx.beginPath();
+                        vtCtx.moveTo(tToX(car.tr), vToY(0));
+                        vtCtx.lineTo(tToX(car.tr), vToY(car.v0));
+                        vtCtx.lineTo(tToX(curT), vToY(inst.v));
+                        vtCtx.lineTo(tToX(curT), vToY(0));
+                        vtCtx.closePath();
+                        vtCtx.fill();
+                    }
+                    vtCtx.restore();
+                }
+
+                // (C) 反應時間轉折點的垂直虛線 (t = t_r)
+                if (curT >= car.tr && car.tr > 0) {
+                    vtCtx.save();
+                    vtCtx.strokeStyle = car.color;
+                    vtCtx.globalAlpha = 0.55;
+                    vtCtx.lineWidth = 1.5;
+                    vtCtx.setLineDash([4, 4]);
+                    vtCtx.beginPath();
+                    vtCtx.moveTo(tToX(car.tr), vToY(car.v0));
+                    vtCtx.lineTo(tToX(car.tr), vToY(0));
+                    vtCtx.stroke();
+                    vtCtx.restore();
+                }
+
+                // (D) 隨時間即時生成的實線 v-t 圖線
+                if (curT > 0) {
+                    const inst = getCarStateAtTime(car, curT);
+                    vtCtx.save();
+                    vtCtx.strokeStyle = car.color;
+                    vtCtx.lineWidth = 3;
+                    vtCtx.lineCap = 'round';
+                    vtCtx.lineJoin = 'round';
+                    vtCtx.beginPath();
+                    vtCtx.moveTo(tToX(0), vToY(car.v0));
+                    if (curT <= car.tr) {
+                        vtCtx.lineTo(tToX(curT), vToY(car.v0));
+                    } else {
+                        vtCtx.lineTo(tToX(car.tr), vToY(car.v0));
+                        vtCtx.lineTo(tToX(curT), vToY(inst.v));
+                    }
+                    vtCtx.stroke();
+                    vtCtx.restore();
+                }
+
+                // (E) 關鍵轉折點與當前時間點的圓點標記
+                vtCtx.fillStyle = car.color;
+                vtCtx.beginPath();
+                vtCtx.arc(tToX(0), vToY(car.v0), 4, 0, Math.PI * 2);
+                vtCtx.fill();
+
+                if (curT >= car.tr) {
+                    vtCtx.fillStyle = '#ffffff';
+                    vtCtx.strokeStyle = car.color;
+                    vtCtx.lineWidth = 2.5;
+                    vtCtx.beginPath();
+                    vtCtx.arc(tToX(car.tr), vToY(car.v0), 4.5, 0, Math.PI * 2);
+                    vtCtx.fill();
+                    vtCtx.stroke();
+                }
+
+                const instNow = getCarStateAtTime(car, state.sim.t);
+                const dotT = Math.min(state.sim.t, m.tTotal);
+                const px = tToX(dotT);
+                const py = vToY(instNow.v);
+
+                vtCtx.save();
+                vtCtx.fillStyle = car.color;
+                vtCtx.beginPath();
+                vtCtx.arc(px, py, 6, 0, Math.PI * 2);
+                vtCtx.fill();
+                vtCtx.strokeStyle = '#ffffff';
+                vtCtx.lineWidth = 2;
+                vtCtx.stroke();
+
+                // 標註點旁的簡短數據標籤 (使用標準科學單位 m s⁻¹)
+                vtCtx.font = 'bold 11px Inter, "Noto Sans TC", sans-serif';
+                vtCtx.fillStyle = car.color;
+                vtCtx.textAlign = 'left';
+                vtCtx.textBaseline = 'bottom';
+                const isCarA = labelPrefix.includes('A');
+                const offsetY = isCarA ? -8 : 18;
+                vtCtx.fillText(`${labelPrefix}: (${dotT.toFixed(1)} s, ${instNow.v.toFixed(1)} m s⁻¹)`, Math.min(px + 8, w - 155), py + offsetY);
+                vtCtx.restore();
+            }
+
+            const carALabel = state.lang === 'en' ? 'Car A' : '車A';
+            const carBLabel = state.lang === 'en' ? 'Car B' : '車B';
+
+            if (state.carB.enabled) {
+                renderCarCurve(state.carB, carBLabel);
+            }
+            renderCarCurve(state.carA, carALabel);
+
+            // 3. 繪製主座標軸 (X軸與Y軸)
+            vtCtx.strokeStyle = '#334155';
+            vtCtx.lineWidth = 2;
+            vtCtx.beginPath();
+            vtCtx.moveTo(padLeft, padTop);
+            vtCtx.lineTo(padLeft, padTop + plotH);
+            vtCtx.lineTo(padLeft + plotW, padTop + plotH);
+            vtCtx.stroke();
+
+            // 座標軸名稱 (支援中英切換與標準單位 m s⁻¹)
+            vtCtx.fillStyle = '#0f172a';
+            vtCtx.font = 'bold 12px Inter, "Noto Sans TC", sans-serif';
+            vtCtx.textAlign = 'left';
+            vtCtx.textBaseline = 'top';
+            const yAxisLabel = state.lang === 'en'
+                ? 'Velocity v / m s⁻¹'
+                : (state.lang === 'zh' ? '速度 v / m s⁻¹' : '速度 Velocity v / m s⁻¹');
+            vtCtx.fillText(yAxisLabel, padLeft - 44, 6);
+
+            vtCtx.textAlign = 'right';
+            vtCtx.textBaseline = 'bottom';
+            const xAxisLabel = state.lang === 'en'
+                ? 'Time t / s'
+                : (state.lang === 'zh' ? '時間 t / s' : '時間 Time t / s');
+            vtCtx.fillText(xAxisLabel, padLeft + plotW, h - 6);
+
+            // 4. 滑鼠懸停十字準線
+            if (state.hoverTime !== null && state.hoverTime >= 0 && state.hoverTime <= maxT) {
+                const hx = tToX(state.hoverTime);
+                vtCtx.save();
+                vtCtx.strokeStyle = '#94a3b8';
+                vtCtx.lineWidth = 1;
+                vtCtx.setLineDash([4, 4]);
+                vtCtx.beginPath();
+                vtCtx.moveTo(hx, padTop);
+                vtCtx.lineTo(hx, padTop + plotH);
+                vtCtx.stroke();
+
+                const hA = getCarStateAtTime(state.carA, state.hoverTime);
+                let tooltip = `t = ${state.hoverTime.toFixed(2)} s | v_A = ${hA.v.toFixed(1)} m s⁻¹`;
+                if (state.carB.enabled) {
+                    const hB = getCarStateAtTime(state.carB, state.hoverTime);
+                    tooltip += ` | v_B = ${hB.v.toFixed(1)} m s⁻¹`;
+                }
+                vtCtx.font = '11px Inter, monospace';
+                vtCtx.fillStyle = '#1e293b';
+                const tw = vtCtx.measureText(tooltip).width + 18;
+                const tx = Math.min(Math.max(hx - tw / 2, padLeft), padLeft + plotW - tw);
+                vtCtx.beginPath();
+                vtCtx.roundRect(tx, padTop + 4, tw, 22, 6);
+                vtCtx.fill();
+
+                vtCtx.fillStyle = '#ffffff';
+                vtCtx.textAlign = 'center';
+                vtCtx.textBaseline = 'middle';
+                vtCtx.fillText(tooltip, tx + tw / 2, padTop + 15);
+                vtCtx.restore();
+            }
+        }
+
+        // --- 主動畫迴圈 ---
+        function animate(timestamp) {
+            if (state.sim.playing) {
+                if (state.sim.lastFrameTime === null) {
+                    state.sim.lastFrameTime = timestamp;
+                }
+                const dt = ((timestamp - state.sim.lastFrameTime) / 1000) * state.sim.speed;
+                state.sim.lastFrameTime = timestamp;
+
+                const maxT = getMaxSimTime();
+                state.sim.t += dt;
+
+                if (state.sim.t >= maxT) {
+                    state.sim.t = maxT;
+                    state.sim.playing = false;
+                    state.sim.lastFrameTime = null;
+                }
+                updateUIText();
+            } else {
+                state.sim.lastFrameTime = null;
+            }
+
+            updateAutoScaleViewport();
+            drawRoad();
+            drawVTGraph();
+
+            requestAnimationFrame(animate);
+        }
+
+        // --- 綁定互動事件 ---
+        function bindEvents() {
+            // Language Switcher Buttons
+            document.querySelectorAll('.lang-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    state.lang = btn.dataset.lang;
+                    document.querySelectorAll('.lang-btn').forEach(b => {
+                        b.classList.remove('bg-blue-600', 'text-white', 'shadow-sm', 'font-bold');
+                        b.classList.add('text-slate-600', 'font-medium');
+                    });
+                    btn.classList.add('bg-blue-600', 'text-white', 'shadow-sm', 'font-bold');
+                    btn.classList.remove('text-slate-600', 'font-medium');
+                    applyStaticLanguageUI();
+                });
+            });
+
+            // Sliders for Car A
+            document.getElementById('v0A').addEventListener('input', (e) => {
+                state.carA.v0 = parseFloat(e.target.value);
+                clampSimTime();
+                updateUIText();
+            });
+            document.getElementById('trA').addEventListener('input', (e) => {
+                state.carA.tr = parseFloat(e.target.value);
+                clampSimTime();
+                updateUIText();
+            });
+            document.getElementById('accA').addEventListener('input', (e) => {
+                state.carA.acc = parseFloat(e.target.value);
+                clampSimTime();
+                updateUIText();
+            });
+
+            // Sliders for Car B
+            document.getElementById('v0B').addEventListener('input', (e) => {
+                state.carB.v0 = parseFloat(e.target.value);
+                clampSimTime();
+                updateUIText();
+            });
+            document.getElementById('trB').addEventListener('input', (e) => {
+                state.carB.tr = parseFloat(e.target.value);
+                clampSimTime();
+                updateUIText();
+            });
+            document.getElementById('accB').addEventListener('input', (e) => {
+                state.carB.acc = parseFloat(e.target.value);
+                clampSimTime();
+                updateUIText();
+            });
+
+            // Enable/Disable Car B
+            document.getElementById('chkEnableCarB').addEventListener('change', (e) => {
+                state.carB.enabled = e.target.checked;
+                const panelB = document.getElementById('panelCarB');
+                const legendB = document.getElementById('legendCarB');
+                if (state.carB.enabled) {
+                    panelB.classList.remove('opacity-40', 'pointer-events-none');
+                    legendB.classList.remove('opacity-40');
+                } else {
+                    panelB.classList.add('opacity-40', 'pointer-events-none');
+                    legendB.classList.add('opacity-40');
+                }
+                clampSimTime();
+                updateUIText();
+            });
+
+            // Copy Car A to Car B
+            document.getElementById('btnCopyAtoB').addEventListener('click', () => {
+                state.carB.v0 = state.carA.v0;
+                state.carB.tr = state.carA.tr;
+                state.carB.acc = state.carA.acc;
+                syncSlidersFromState();
+                updateUIText();
+            });
+
+            // Playback Controls
+            document.getElementById('btnPlayPause').addEventListener('click', () => {
+                const maxT = getMaxSimTime();
+                if (!state.sim.playing && state.sim.t >= maxT - 0.01) {
+                    state.sim.t = 0;
+                }
+                state.sim.playing = !state.sim.playing;
+                updateUIText();
+            });
+
+            document.getElementById('btnReset').addEventListener('click', () => {
+                state.sim.playing = false;
+                state.sim.t = 0;
+                updateUIText();
+            });
+
+            document.getElementById('btnEnd').addEventListener('click', () => {
+                state.sim.playing = false;
+                state.sim.t = getMaxSimTime();
+                updateUIText();
+            });
+
+            document.getElementById('timeScrubber').addEventListener('input', (e) => {
+                state.sim.playing = false;
+                state.sim.t = parseFloat(e.target.value);
+                updateUIText();
+            });
+
+            // Speed Buttons
+            document.querySelectorAll('.speed-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    state.sim.speed = parseFloat(btn.dataset.speed);
+                    document.querySelectorAll('.speed-btn').forEach(b => {
+                        b.classList.remove('bg-white', 'text-slate-900', 'shadow-sm', 'font-semibold');
+                        b.classList.add('text-slate-600', 'font-medium');
+                    });
+                    btn.classList.add('bg-white', 'text-slate-900', 'shadow-sm', 'font-semibold');
+                    btn.classList.remove('text-slate-600', 'font-medium');
+                });
+            });
+
+            // Graph Visual Options
+            document.getElementById('chkShowArea').addEventListener('change', (e) => {
+                state.options.showArea = e.target.checked;
+            });
+            document.getElementById('chkShowGhost').addEventListener('change', (e) => {
+                state.options.showGhost = e.target.checked;
+            });
+            document.getElementById('chkLiveZoom').addEventListener('change', (e) => {
+                state.options.liveZoom = e.target.checked;
+            });
+
+            // Top Presets
+            document.getElementById('btnPresetReaction').addEventListener('click', () => {
+                applyPreset({
+                    carA: { v0: 20, tr: 0.7, acc: 5 },
+                    carB: { enabled: true, v0: 20, tr: 1.8, acc: 5 }
+                });
+            });
+            document.getElementById('btnPresetSpeed').addEventListener('click', () => {
+                applyPreset({
+                    carA: { v0: 15, tr: 1.0, acc: 5 },
+                    carB: { enabled: true, v0: 30, tr: 1.0, acc: 5 }
+                });
+            });
+            document.getElementById('btnPresetWet').addEventListener('click', () => {
+                applyPreset({
+                    carA: { v0: 24, tr: 0.8, acc: 6 },
+                    carB: { enabled: true, v0: 24, tr: 0.8, acc: 3 }
+                });
+            });
+
+            // Hover & Click on v-t Graph
+            vtCanvas.addEventListener('mousemove', (e) => {
+                const rect = vtCanvas.getBoundingClientRect();
+                const padLeft = 56;
+                const padRight = 30;
+                const plotW = rect.width - padLeft - padRight;
+                const mx = e.clientX - rect.left;
+                if (mx >= padLeft && mx <= padLeft + plotW) {
+                    const ratio = (mx - padLeft) / plotW;
+                    state.hoverTime = ratio * state.viewport.vtMaxT;
+                } else {
+                    state.hoverTime = null;
+                }
+            });
+            vtCanvas.addEventListener('mouseleave', () => {
+                state.hoverTime = null;
+            });
+            vtCanvas.addEventListener('click', () => {
+                if (state.hoverTime !== null) {
+                    state.sim.playing = false;
+                    state.sim.t = Math.min(state.hoverTime, getMaxSimTime());
+                    updateUIText();
+                }
+            });
+
+            window.addEventListener('resize', resizeCanvases);
+        }
+
+        function clampSimTime() {
+            const maxT = getMaxSimTime();
+            if (state.sim.t > maxT) {
+                state.sim.t = maxT;
+            }
+        }
+
+        function syncSlidersFromState() {
+            document.getElementById('v0A').value = state.carA.v0;
+            document.getElementById('trA').value = state.carA.tr;
+            document.getElementById('accA').value = state.carA.acc;
+
+            document.getElementById('v0B').value = state.carB.v0;
+            document.getElementById('trB').value = state.carB.tr;
+            document.getElementById('accB').value = state.carB.acc;
+
+            const chkB = document.getElementById('chkEnableCarB');
+            chkB.checked = state.carB.enabled;
+            chkB.dispatchEvent(new Event('change'));
+        }
+
+        function applyPreset(config) {
+            Object.assign(state.carA, config.carA);
+            Object.assign(state.carB, config.carB);
+            syncSlidersFromState();
+            state.sim.t = 0;
+            state.sim.playing = true;
+            updateUIText();
+        }
+
+        window.loadProblem = function(num) {
+            if (num === 1) {
+                applyPreset({
+                    carA: { v0: 20, tr: 0.8, acc: 5 },
+                    carB: { enabled: false, v0: 20, tr: 0.8, acc: 5 }
+                });
+            } else if (num === 2) {
+                applyPreset({
+                    carA: { v0: 15, tr: 1.0, acc: 5 },
+                    carB: { enabled: true, v0: 30, tr: 1.0, acc: 5 }
+                });
+            } else if (num === 3) {
+                applyPreset({
+                    carA: { v0: 24, tr: 0.8, acc: 6 },
+                    carB: { enabled: true, v0: 24, tr: 0.8, acc: 3 }
+                });
+            }
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        };
+
+        // --- 初始化啟動 ---
+        window.onload = function() {
+            resizeCanvases();
+            bindEvents();
+            applyStaticLanguageUI();
+            requestAnimationFrame(animate);
+        };
+    </script>
+</body>
+</html>
